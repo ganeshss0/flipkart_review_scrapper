@@ -11,15 +11,15 @@ CORS(application)
 
 
 
-def get_query(baseurl: str) -> str:
-    '''Getting the Query in the search field.'''
+def get_query(baseurl: str) -> 'tuple(str)':
+    '''Return a tuple of (baseurl + query) and query.'''
     
     if request.method == 'GET':
         query = request.args['query']
     elif request.method == 'POST':
         query = request.json['query']
 
-    return baseurl + query
+    return baseurl + query, query
     
 
 
@@ -77,38 +77,40 @@ def get_reviews(url: str) -> None:
             pass
     
     # Dumping all the data into a File.
-    with open(str(time.time_ns())+'.json', 'w') as file:
+    fileName = './.temp/'+str(time.time_ns())+'.json'
+    with open(fileName, 'w') as file:
         json.dump(data, file)
 
 
-def all_reviews(fileName: str = 'result.json', delete_reviews: bool = True) -> 'list[dict]':
+def all_reviews(fileName: str, delete_temporary_file: bool = True) -> 'list[dict]':
     '''Return a list of dictonary and store a JSON file after merging all the Review JSON files.'''
     result = []
-    for file in os.listdir('./'):
+    for file in os.listdir('./.temp'):
         if file.endswith('.json'):
+            file = './.temp/' + file
             with open(file) as f:
                 data = json.load(f)
-            if delete_reviews:
+            if delete_temporary_file:
                 os.remove(file)
             result.extend(data)
-    
-    with open('./result.json', 'w') as file:
+    fileName = './Results/' + fileName + time.strftime('_%y%m%d_%H%M%S') + '.json'
+    with open(fileName, 'w') as file:
         json.dump(result, file)
     return result
 
 
-@app.route('/')
+@application.route('/')
 def homepage():
     return render_template('index.html')
 
-@app.route('/review', methods = ['GET', 'POST'])
+@application.route('/review', methods = ['GET', 'POST'])
 @cross_origin()
 def reviews():
     # Getting the Query
     query = get_query(baseurl = 'https://www.flipkart.com/search?q=')
     
     # Getting the response of query
-    page = get_response(query)
+    page = get_response(query[0])
     
     # Parsing the response into Soup Object
     parsed_page = html_parser(page)
@@ -124,7 +126,7 @@ def reviews():
         pool.map(get_reviews, product_links)
     
     # Getting all the Reviews
-    result = all_reviews()
+    result = all_reviews(fileName = query[1])
 
     if request.method == 'GET':
         return render_template('result.html', reviews = result)
